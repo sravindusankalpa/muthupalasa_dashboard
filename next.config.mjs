@@ -9,6 +9,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-}
+  experimental: {
+    serverComponentsExternalPackages: ['puppeteer'],
+  },
+};
 
-export default nextConfig
+module.exports = nextConfig;
