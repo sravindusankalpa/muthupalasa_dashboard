@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb-client"
+import puppeteer from 'puppeteer'
 
 const TEST_EVENT_DB = "test_event_registration"
 const TEST_REGISTRATIONS_COLLECTION = "test_registrations"
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     ])
 
     if (format === "csv") {
-      // Generate CSV
+      // Generate CSV (unchanged from your original code)
       const csvHeaders = [
         "ID",
         "Owner Name",
@@ -74,16 +75,41 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // Generate PDF using Puppeteer-like HTML to PDF conversion
-    // For now, we'll create a downloadable HTML that can be converted to PDF
+    // Generate PDF using Puppeteer
     const htmlContent = await generatePDFHTML(registrations, totalCount, search)
+    
+    // Launch Puppeteer
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'] // Needed for some deployment environments
+    })
+    
+    const page = await browser.newPage()
+    await page.setContent(htmlContent, {
+      waitUntil: 'networkidle0'
+    })
+    
+    // Generate PDF buffer
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '0.5in',
+        right: '0.5in',
+        bottom: '0.5in',
+        left: '0.5in'
+      }
+    })
+    
+    await browser.close()
 
-    return new NextResponse(htmlContent, {
+    return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="registration-report-${new Date().toISOString().split("T")[0]}.pdf"`,
       },
     })
+
   } catch (error) {
     console.error("Error generating download:", error)
     return NextResponse.json(
