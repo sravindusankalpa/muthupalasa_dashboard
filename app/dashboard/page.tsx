@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Download, Database, Users, FileText, Loader2, ExternalLink, Calendar } from "lucide-react"
+import { Download, Database, Users, FileText, Loader2, ExternalLink, Calendar, Upload } from "lucide-react"
 
 interface DashboardData {
   summary?: {
@@ -91,6 +91,12 @@ export default function Dashboard() {
             <a href="/registrations">
               <FileText className="h-4 w-4 mr-2" />
               Registrations
+            </a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href="/json-data">
+              <Upload className="h-4 w-4 mr-2" />
+              JSON Data
             </a>
           </Button>
           <Button asChild variant="outline">

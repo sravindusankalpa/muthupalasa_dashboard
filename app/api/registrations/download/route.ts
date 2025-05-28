@@ -1,9 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb-client"
 import puppeteer from 'puppeteer'
+import outletData from '@/public/mpdata.json'; 
 
 const TEST_EVENT_DB = "test_event_registration"
 const TEST_REGISTRATIONS_COLLECTION = "test_registrations"
+
+// Create a NIC to outlet code mapping
+const nicToOutletCodeMap = new Map<string, string>();
+const phoneToOutletCodeMap = new Map<string, string>();
+
+(outletData.dealers || []).forEach((outlet: any) => {
+  if (outlet.NICNUMBER) {
+    // Convert NIC to string and normalize case (uppercase for consistency)
+    const nicString = String(outlet.NICNUMBER).toUpperCase().trim();
+    nicToOutletCodeMap.set(nicString, outlet["BP CODE"] || "N/A");
+  }
+  if (outlet.CONTACTNO) {
+    // Convert phone number to string and remove any non-digit characters for matching
+    const phone = String(outlet.CONTACTNO).replace(/\D/g, '');
+    phoneToOutletCodeMap.set(phone, outlet["BP CODE"] || "N/A");
+  }
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,8 +55,38 @@ export async function GET(req: NextRequest) {
       collection.countDocuments(query),
     ])
 
+    // Enhance registrations with outlet code - FIXED VERSION
+    type RegistrationWithOutlet = typeof registrations[number] & { outletCode: string };
+    const enhancedRegistrations: RegistrationWithOutlet[] = registrations.map(reg => {
+      let outletCode = "N/A";
+      
+      // Try NIC first
+      if (reg.dealerInfo?.ownerNIC) {
+        // Ensure NIC is treated as string and normalize case for lookup
+        const nicString = String(reg.dealerInfo.ownerNIC).toUpperCase().trim();
+        outletCode = nicToOutletCodeMap.get(nicString) || "N/A";
+        
+        // Debug logging (remove in production)
+        console.log(`NIC Lookup - Original: ${reg.dealerInfo.ownerNIC}, Normalized: ${nicString}, Found: ${outletCode}`);
+      }
+      
+      // If NIC lookup failed, try phone number as fallback
+      if (outletCode === "N/A" && reg.dealerInfo?.contactNo) {
+        const phoneString = String(reg.dealerInfo.contactNo).replace(/\D/g, '');
+        outletCode = phoneToOutletCodeMap.get(phoneString) || "N/A";
+        
+        // Debug logging (remove in production)
+        console.log(`Phone Lookup - Original: ${reg.dealerInfo.contactNo}, Normalized: ${phoneString}, Found: ${outletCode}`);
+      }
+      
+      return {
+        ...reg,
+        outletCode
+      };
+    });
+
     if (format === "csv") {
-      // Generate CSV (unchanged from your original code)
+      // Update CSV headers and rows
       const csvHeaders = [
         "ID",
         "Owner Name",
@@ -47,11 +95,12 @@ export async function GET(req: NextRequest) {
         "Contact Number",
         "Event",
         "Classification",
+        "BP Code",
         "Golden Pass",
         "Registered Date",
       ]
 
-      const csvRows = registrations.map((reg, index) => [
+      const csvRows = enhancedRegistrations.map((reg, index) => [
         index + 1,
         reg.dealerInfo?.ownerName || "N/A",
         reg.dealerInfo?.ownerNIC || "N/A",
@@ -59,6 +108,7 @@ export async function GET(req: NextRequest) {
         reg.dealerInfo?.contactNo || "N/A",
         reg.dealerInfo?.event || "N/A",
         reg.dealerInfo?.classification || "N/A",
+        reg.outletCode,
         reg.goldenPass || "No Pass",
         reg.registeredAt ? new Date(reg.registeredAt).toLocaleDateString() : "N/A",
       ])
@@ -76,12 +126,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Generate PDF using Puppeteer
-    const htmlContent = await generatePDFHTML(registrations, totalCount, search)
+    const htmlContent = await generatePDFHTML(enhancedRegistrations, totalCount, search)
     
     // Launch Puppeteer
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'] // Needed for some deployment environments
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     })
     
     const page = await browser.newPage()
@@ -240,6 +290,15 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
           font-size: 8px;
         }
         
+        .outlet-code {
+          background: #10b981;
+          color: white;
+          padding: 2px 4px;
+          border-radius: 3px;
+          font-weight: 600;
+          font-size: 8px;
+        }
+        
         .footer { 
           margin-top: 30px; 
           text-align: center; 
@@ -253,7 +312,6 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
     <body>
       <div class="header">
         <h1>📋 Complete Registration Report</h1>
-        <p><strong>Database:</strong> ${TEST_EVENT_DB}.${TEST_REGISTRATIONS_COLLECTION}</p>
         <p><strong>Generated:</strong> ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
         ${search ? `<p><strong>Filter:</strong> "${search}"</p>` : ""}
         <p><strong>Total Records:</strong> ${totalCount.toLocaleString()}</p>
@@ -288,6 +346,7 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
             <th>Contact</th>
             <th>Event</th>
             <th>Classification</th>
+            <th>BP Code</th>
             <th>Golden Pass</th>
             <th>Registered</th>
           </tr>
@@ -304,6 +363,11 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
               <td>${reg.dealerInfo?.contactNo || "N/A"}</td>
               <td>${reg.dealerInfo?.event || "N/A"}</td>
               <td>${reg.dealerInfo?.classification || "N/A"}</td>
+              <td>${
+                reg.outletCode !== "N/A"
+                  ? `<span class="outlet-code">${reg.outletCode}</span>`
+                  : "N/A"
+              }</td>
               <td>${
                 reg.goldenPass && reg.goldenPass !== ""
                   ? `<span class="golden-pass">${reg.goldenPass}</span>`
