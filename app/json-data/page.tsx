@@ -32,6 +32,7 @@ import {
   ChevronsUpDown,
   Check,
   Bug,
+  UserPlus,
 } from "lucide-react"
 import {
   Command,
@@ -116,6 +117,7 @@ export default function JsonDataPage() {
   const [data, setData] = useState<JsonRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [uploadLoading, setUploadLoading] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
   const [downloadLoading, setDownloadLoading] = useState<"json" | "csv" | "pdf" | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -125,9 +127,11 @@ export default function JsonDataPage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false)
   const [jsonInput, setJsonInput] = useState("")
   const [editData, setEditData] = useState("")
+  const [createData, setCreateData] = useState("")
   const [debugInfo, setDebugInfo] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
@@ -152,6 +156,15 @@ export default function JsonDataPage() {
     "CONTACTNO": "Contact No",
     "EVENT DATE": "Event Date",
     "HOTEL": "Hotel"
+  }
+
+  // Template for new records
+  const getRecordTemplate = () => {
+    const template: { [key: string]: string } = {}
+    columnOrder.forEach(field => {
+      template[field] = ""
+    })
+    return template
   }
 
   const fetchData = async (page = 1, search = "") => {
@@ -211,7 +224,11 @@ export default function JsonDataPage() {
     } catch (error) {
       console.error("Error fetching data:", error)
       alert("Failed to fetch data")
-      setDebugInfo(`Fetch Error: ${error instanceof Error ? error.message : String(error)}`)
+      setDebugInfo(
+        `Fetch Error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
     } finally {
       setLoading(false)
     }
@@ -304,6 +321,46 @@ export default function JsonDataPage() {
     } finally {
       setUploadLoading(false)
     }
+  }
+
+  const handleCreateRecord = async () => {
+    if (!createData.trim()) {
+      alert("Please enter record data")
+      return
+    }
+
+    setCreateLoading(true)
+    try {
+      const recordData = JSON.parse(createData)
+
+      const response = await fetch("/api/json-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(recordData),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert("Record created successfully!")
+        setIsCreateModalOpen(false)
+        setCreateData("")
+        fetchData(currentPage, searchTerm)
+      } else {
+        alert(result.message || "Failed to create record")
+      }
+    } catch (error) {
+      console.error("Error creating record:", error)
+      alert("Invalid JSON format")
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const openCreateModal = () => {
+    const template = getRecordTemplate()
+    setCreateData(JSON.stringify(template, null, 2))
+    setIsCreateModalOpen(true)
   }
 
   const handleEdit = async () => {
@@ -531,7 +588,7 @@ export default function JsonDataPage() {
           <CardDescription >Upload JSON files or paste JSON data directly</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="file-upload">Upload JSON File</Label>
               <div className="flex items-center gap-2">
@@ -583,6 +640,66 @@ export default function JsonDataPage() {
                 </DialogContent>
               </Dialog>
               <p className="text-xs text-muted-foreground">Paste JSON data manually</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Create Single Record</Label>
+              <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full bg-green-50 border-green-200 hover:bg-green-100">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Create New Record
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Create New Record</DialogTitle>
+                    <DialogDescription>
+                      Create a new record by filling in the JSON template below
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">
+                        Pre-filled template with standard fields
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCreateData(JSON.stringify(getRecordTemplate(), null, 2))}
+                      >
+                        Reset Template
+                      </Button>
+                    </div>
+                    <Textarea
+                      placeholder='{"AREA": "", "BP CODE": "", ...}'
+                      value={createData}
+                      onChange={(e) => setCreateData(e.target.value)}
+                      rows={15}
+                      className="font-mono text-sm"
+                    />
+                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                        <div className="text-sm text-green-800">
+                          <strong>Tip:</strong> Fill in the values for each field. Leave empty ("") for fields you don't need.
+                          The record will be added to your table once created.
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleCreateRecord} disabled={createLoading} className="bg-green-600 hover:bg-green-700">
+                        {createLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                        Create Record
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <p className="text-xs text-muted-foreground">Create individual records</p>
             </div>
           </div>
 
@@ -673,6 +790,10 @@ export default function JsonDataPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <Button onClick={openCreateModal} variant="default" className="bg-green-600 hover:bg-green-700">
+              <UserPlus className="h-4 w-4 mr-2" />
+              Create Record
+            </Button>
             <Button onClick={() => downloadFile("json")} variant="outline" disabled={downloadLoading === "json"}>
               {downloadLoading === "json" ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -740,6 +861,12 @@ export default function JsonDataPage() {
             <div className="text-center py-8 text-muted-foreground">
               <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No data found. Upload some JSON data to get started.</p>
+              <div className="mt-4">
+                <Button onClick={openCreateModal} variant="outline" className="bg-green-50 border-green-200">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create Your First Record
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -880,6 +1007,106 @@ export default function JsonDataPage() {
             <div className="flex justify-end">
               <Button variant="outline" onClick={() => setIsDebugModalOpen(false)}>
                 Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Modal */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-green-600" />
+              Create New Record
+            </DialogTitle>
+            <DialogDescription>
+              Fill in the JSON template below to create a new record. All fields are optional.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-muted-foreground">
+                <strong>Quick Actions:</strong>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateData(JSON.stringify(getRecordTemplate(), null, 2))}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Reset Template
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(createData)
+                      setCreateData(JSON.stringify(parsed, null, 2))
+                    } catch (e) {
+                      alert("Invalid JSON format")
+                    }
+                  }}
+                >
+                  Format JSON
+                </Button>
+              </div>
+            </div>
+            
+            <Textarea
+              placeholder='{"AREA": "", "BP CODE": "", ...}'
+              value={createData}
+              onChange={(e) => setCreateData(e.target.value)}
+              rows={18}
+              className="font-mono text-sm"
+            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                  <div className="text-sm text-green-800">
+                    <strong>Tips:</strong>
+                    <ul className="mt-1 list-disc list-inside space-y-1">
+                      <li>Fill in values for each field you want to include</li>
+                      <li>Leave fields empty ("") if not needed</li>
+                      <li>Use proper JSON format with quotes around strings</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <strong>Standard Fields:</strong>
+                    <ul className="mt-1 text-xs space-y-1">
+                      <li>• AREA, BP CODE, BP NAME</li>
+                      <li>• OUTLET CODE, OUTLET NAME</li>
+                      <li>• CLASSIFICATION, DEALER NAME</li>
+                      <li>• NICNUMBER, CONTACTNO</li>
+                      <li>• EVENT DATE, HOTEL</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateRecord} disabled={createLoading} className="bg-green-600 hover:bg-green-700">
+                {createLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <UserPlus className="h-4 w-4 mr-2" />
+                )}
+                Create Record
               </Button>
             </div>
           </div>
