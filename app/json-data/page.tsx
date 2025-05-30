@@ -1046,10 +1046,10 @@ export default function JsonDataPage() {
               )}
               CSV
             </Button>
-            <Button onClick={handleDeleteAll} variant="destructive" disabled={totalRecords === 0}>
+            {/* <Button onClick={handleDeleteAll} variant="destructive" disabled={totalRecords === 0}>
               <Trash2 className="h-4 w-4 mr-2" />
               Delete All
-            </Button>
+            </Button> */}
           </div>
           
           <div className="flex items-center gap-2">
