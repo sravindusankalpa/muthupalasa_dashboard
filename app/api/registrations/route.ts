@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb-client"
 
-const TEST_EVENT_DB = "test_event_registration"
-const TEST_REGISTRATIONS_COLLECTION = "test_registrations"
+const TEST_EVENT_DB = "event_registration"
+const TEST_REGISTRATIONS_COLLECTION = "registrations"
 
 export async function GET(req: NextRequest) {
   try {

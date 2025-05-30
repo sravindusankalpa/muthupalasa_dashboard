@@ -16,6 +16,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Upload,
   Download,
   Search,
@@ -33,6 +40,9 @@ import {
   Check,
   Bug,
   UserPlus,
+  ChevronUp,
+  ChevronDown,
+  Shield,
 } from "lucide-react"
 import {
   Command,
@@ -113,6 +123,116 @@ function ColumnToggle({ columns, visibleColumns, setVisibleColumns }: {
   )
 }
 
+// CAPTCHA Component for Delete Confirmation
+function DeleteConfirmation({ isOpen, onClose, onConfirm, recordInfo }: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  recordInfo: string
+}) {
+  const [captcha, setCaptcha] = useState("")
+  const [userInput, setUserInput] = useState("")
+  const [error, setError] = useState("")
+
+  const generateCaptcha = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    let result = ""
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    setCaptcha(result)
+    setUserInput("")
+    setError("")
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      generateCaptcha()
+    }
+  }, [isOpen])
+
+  const handleConfirm = () => {
+    if (userInput.toUpperCase() === captcha) {
+      onConfirm()
+      onClose()
+      setUserInput("")
+      setError("")
+    } else {
+      setError("CAPTCHA doesn't match. Please try again.")
+      generateCaptcha()
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <Shield className="h-5 w-5" />
+            Confirm Delete
+          </DialogTitle>
+          <DialogDescription>
+            You are about to delete: <strong>{recordInfo}</strong>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+              <div className="text-sm text-red-800">
+                <strong>Warning:</strong> This action cannot be undone. Please verify by entering the CAPTCHA below.
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Enter the CAPTCHA to confirm deletion:</Label>
+            <div className="bg-gray-100 p-4 rounded-lg text-center">
+              <span className="font-mono text-2xl font-bold tracking-widest text-gray-800 select-none">
+                {captcha}
+              </span>
+            </div>
+            <Input
+              placeholder="Enter CAPTCHA here"
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value.toUpperCase())}
+              className="font-mono text-center text-lg tracking-widest"
+              maxLength={6}
+            />
+            {error && (
+              <p className="text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {error}
+              </p>
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={generateCaptcha}
+              className="border-blue-200 text-blue-700"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              New CAPTCHA
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleConfirm}
+              disabled={userInput.length !== 6}
+            >
+              Delete Record
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function JsonDataPage() {
   const [data, setData] = useState<JsonRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -120,6 +240,7 @@ export default function JsonDataPage() {
   const [createLoading, setCreateLoading] = useState(false)
   const [downloadLoading, setDownloadLoading] = useState<"json" | "csv" | "pdf" | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [searchType, setSearchType] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
@@ -129,10 +250,14 @@ export default function JsonDataPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDebugModalOpen, setIsDebugModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deleteRecordId, setDeleteRecordId] = useState<string>("")
+  const [deleteRecordInfo, setDeleteRecordInfo] = useState<string>("")
   const [jsonInput, setJsonInput] = useState("")
-  const [editData, setEditData] = useState("")
+  const [editData, setEditData] = useState<JsonRecord>({} as JsonRecord)
   const [createData, setCreateData] = useState("")
   const [debugInfo, setDebugInfo] = useState("")
+  const [showUploadSection, setShowUploadSection] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
 
@@ -158,6 +283,16 @@ export default function JsonDataPage() {
     "HOTEL": "Hotel"
   }
 
+  // Search types
+  const searchTypes = [
+    { value: "all", label: "All Fields" },
+    { value: "nic", label: "NIC Number" },
+    { value: "name", label: "Names (BP/Dealer/Outlet)" },
+    { value: "area", label: "Area" },
+    { value: "classification", label: "Classification" },
+    { value: "contact", label: "Contact Number" }
+  ]
+
   // Template for new records
   const getRecordTemplate = () => {
     const template: { [key: string]: string } = {}
@@ -167,14 +302,21 @@ export default function JsonDataPage() {
     return template
   }
 
-  const fetchData = async (page = 1, search = "") => {
+  const fetchData = async (page = 1, search = "", searchBy = "all") => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: "20",
-        ...(search && { search }),
       })
+
+      // Add search parameters
+      if (search && search.trim()) {
+        params.append("search", search.trim())
+        if (searchBy && searchBy !== "all") {
+          params.append("searchBy", searchBy)
+        }
+      }
 
       console.log("Fetching data with params:", params.toString())
       
@@ -198,6 +340,31 @@ export default function JsonDataPage() {
           } else {
             records = [result.data] // Single record
           }
+        }
+
+        // Client-side filtering if API doesn't support searchBy
+        if (search && search.trim() && searchBy !== "all") {
+          records = records.filter(record => {
+            const searchLower = search.toLowerCase()
+            switch (searchBy) {
+              case "nic":
+                return record.NICNUMBER && record.NICNUMBER.toLowerCase().includes(searchLower)
+              case "name":
+                return (
+                  (record["BP NAME"] && record["BP NAME"].toLowerCase().includes(searchLower)) ||
+                  (record["DEALER NAME"] && record["DEALER NAME"].toLowerCase().includes(searchLower)) ||
+                  (record["OUTLET NAME"] && record["OUTLET NAME"].toLowerCase().includes(searchLower))
+                )
+              case "area":
+                return record.AREA && record.AREA.toLowerCase().includes(searchLower)
+              case "classification":
+                return record.CLASSIFICATION && record.CLASSIFICATION.toLowerCase().includes(searchLower)
+              case "contact":
+                return record.CONTACTNO && record.CONTACTNO.toLowerCase().includes(searchLower)
+              default:
+                return true
+            }
+          })
         }
 
         // Ensure all records have valid _id
@@ -273,7 +440,7 @@ export default function JsonDataPage() {
 
       if (result.success) {
         alert(result.message)
-        fetchData(currentPage, searchTerm)
+        fetchData(currentPage, searchTerm, searchType)
         if (fileInputRef.current) {
           fileInputRef.current.value = ""
         }
@@ -311,7 +478,7 @@ export default function JsonDataPage() {
         alert(result.message)
         setIsUploadModalOpen(false)
         setJsonInput("")
-        fetchData(currentPage, searchTerm)
+        fetchData(currentPage, searchTerm, searchType)
       } else {
         alert(result.message || "Failed to upload data")
       }
@@ -345,7 +512,7 @@ export default function JsonDataPage() {
         alert("Record created successfully!")
         setIsCreateModalOpen(false)
         setCreateData("")
-        fetchData(currentPage, searchTerm)
+        fetchData(currentPage, searchTerm, searchType)
       } else {
         alert(result.message || "Failed to create record")
       }
@@ -367,12 +534,10 @@ export default function JsonDataPage() {
     if (!selectedRecord) return
 
     try {
-      const updatedData = JSON.parse(editData)
-
       const response = await fetch(`/api/json-data?id=${selectedRecord._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify(editData),
       })
 
       const result = await response.json()
@@ -381,22 +546,29 @@ export default function JsonDataPage() {
         alert("Record updated successfully")
         setIsEditModalOpen(false)
         setSelectedRecord(null)
-        setEditData("")
-        fetchData(currentPage, searchTerm)
+        setEditData({} as JsonRecord)
+        fetchData(currentPage, searchTerm, searchType)
       } else {
         alert(result.message || "Failed to update record")
       }
     } catch (error) {
       console.error("Error updating record:", error)
-      alert("Invalid JSON format")
+      alert("Failed to update record")
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this record?")) return
+  const confirmDelete = (id: string, record: JsonRecord) => {
+    setDeleteRecordId(id)
+    const info = record["BP NAME"] || record["DEALER NAME"] || record["OUTLET NAME"] || `Record ID: ${id}`
+    setDeleteRecordInfo(info)
+    setIsDeleteModalOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!deleteRecordId) return
 
     try {
-      const response = await fetch(`/api/json-data?id=${id}`, {
+      const response = await fetch(`/api/json-data?id=${deleteRecordId}`, {
         method: "DELETE",
       })
 
@@ -404,7 +576,7 @@ export default function JsonDataPage() {
 
       if (result.success) {
         alert("Record deleted successfully")
-        fetchData(currentPage, searchTerm)
+        fetchData(currentPage, searchTerm, searchType)
       } else {
         alert(result.message || "Failed to delete record")
       }
@@ -426,7 +598,7 @@ export default function JsonDataPage() {
 
       if (result.success) {
         alert(result.message)
-        fetchData(currentPage, searchTerm)
+        fetchData(currentPage, searchTerm, searchType)
       } else {
         alert(result.message || "Failed to delete records")
       }
@@ -441,8 +613,15 @@ export default function JsonDataPage() {
     try {
       const params = new URLSearchParams({
         format: "all",
-        ...(searchTerm && { search: searchTerm }),
       })
+
+      // Add search parameters for download
+      if (searchTerm && searchTerm.trim()) {
+        params.append("search", searchTerm.trim())
+        if (searchType && searchType !== "all") {
+          params.append("searchBy", searchType)
+        }
+      }
 
       const response = await fetch(`/api/json-data?${params}`)
       
@@ -456,17 +635,44 @@ export default function JsonDataPage() {
         throw new Error(result.message || "Failed to fetch data")
       }
 
+      let allRecords = result.data
+
+      // Apply client-side filtering if needed
+      if (searchTerm && searchTerm.trim() && searchType !== "all") {
+        allRecords = allRecords.filter((record: JsonRecord) => {
+          const searchLower = searchTerm.toLowerCase()
+          switch (searchType) {
+            case "nic":
+              return record.NICNUMBER && record.NICNUMBER.toLowerCase().includes(searchLower)
+            case "name":
+              return (
+                (record["BP NAME"] && record["BP NAME"].toLowerCase().includes(searchLower)) ||
+                (record["DEALER NAME"] && record["DEALER NAME"].toLowerCase().includes(searchLower)) ||
+                (record["OUTLET NAME"] && record["OUTLET NAME"].toLowerCase().includes(searchLower))
+              )
+            case "area":
+              return record.AREA && record.AREA.toLowerCase().includes(searchLower)
+            case "classification":
+              return record.CLASSIFICATION && record.CLASSIFICATION.toLowerCase().includes(searchLower)
+            case "contact":
+              return record.CONTACTNO && record.CONTACTNO.toLowerCase().includes(searchLower)
+            default:
+              return true
+          }
+        })
+      }
+
       let content = ""
       let mimeType = ""
       let filename = `json-data-export-${new Date().toISOString().split("T")[0]}`
 
       if (format === "json") {
-        content = JSON.stringify(result.data, null, 2)
+        content = JSON.stringify(allRecords, null, 2)
         mimeType = "application/json"
         filename += ".json"
       } else if (format === "csv") {
         const headers = visibleColumns.join(",")
-        const rows = result.data.map((record: JsonRecord) => 
+        const rows = allRecords.map((record: JsonRecord) => 
           visibleColumns.map(col => `"${String(record[col] || "")}"`).join(",")
         ).join("\n")
         content = headers + "\n" + rows
@@ -495,12 +701,12 @@ export default function JsonDataPage() {
 
   const handleSearch = () => {
     setCurrentPage(1)
-    fetchData(1, searchTerm)
+    fetchData(1, searchTerm, searchType)
   }
 
   const openEditModal = (record: JsonRecord) => {
     setSelectedRecord(record)
-    setEditData(JSON.stringify(record, null, 2))
+    setEditData({ ...record })
     setIsEditModalOpen(true)
   }
 
@@ -562,9 +768,18 @@ export default function JsonDataPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">📊 JSON Data Management</h1>
-          <p className="text-muted-foreground">Upload, manage, and export JSON data with flexible structure</p>
+          <p className="text-muted-foreground">Manage and export JSON data with advanced search and security</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={() => setShowUploadSection(!showUploadSection)} 
+            variant="outline" 
+            className="border-green-200 text-green-700"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {showUploadSection ? "Hide Upload" : "Show Upload"}
+            {showUploadSection ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+          </Button>
           <Button onClick={debugApi} variant="outline" className="border-yellow-200 text-yellow-700">
             <Bug className="h-4 w-4 mr-2" />
             Debug API
@@ -578,142 +793,144 @@ export default function JsonDataPage() {
         </div>
       </div>
 
-      {/* Upload Section */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-black">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-800">
-            <Upload className="h-5 w-5" />
-            Upload JSON Data
-          </CardTitle>
-          <CardDescription >Upload JSON files or paste JSON data directly</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="file-upload">Upload JSON File</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="file-upload"
-                  type="file"
-                  accept=".json"
-                  onChange={handleFileUpload}
-                  disabled={uploadLoading}
-                  ref={fileInputRef}
-                />
-                {uploadLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {/* Collapsible Upload Section */}
+      {showUploadSection && (
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-black">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-800">
+              <Upload className="h-5 w-5" />
+              Upload JSON Data
+            </CardTitle>
+            <CardDescription>Upload JSON files or paste JSON data directly</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="file-upload">Upload JSON File</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileUpload}
+                    disabled={uploadLoading}
+                    ref={fileInputRef}
+                  />
+                  {uploadLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                </div>
+                <p className="text-xs text-muted-foreground">Select a .json file to upload</p>
               </div>
-              <p className="text-xs text-muted-foreground">Select a .json file to upload</p>
-            </div>
 
-            <div className="space-y-2">
-              <Label>Manual JSON Input</Label>
-              <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Paste JSON Data
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Upload JSON Data</DialogTitle>
-                    <DialogDescription>Paste your JSON data below (single object or array)</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <Textarea
-                      placeholder='{"AREA": "Colombo Metro", "BP CODE": 803567, ...}'
-                      value={jsonInput}
-                      onChange={(e) => setJsonInput(e.target.value)}
-                      rows={15}
-                      className="font-mono text-sm"
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" onClick={() => setIsUploadModalOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleManualUpload} disabled={uploadLoading}>
-                        {uploadLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Upload Data
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <p className="text-xs text-muted-foreground">Paste JSON data manually</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Create Single Record</Label>
-              <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full bg-green-50 border-green-200 hover:bg-green-100">
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Create New Record
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Create New Record</DialogTitle>
-                    <DialogDescription>
-                      Create a new record by filling in the JSON template below
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        Pre-filled template with standard fields
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCreateData(JSON.stringify(getRecordTemplate(), null, 2))}
-                      >
-                        Reset Template
-                      </Button>
-                    </div>
-                    <Textarea
-                      placeholder='{"AREA": "", "BP CODE": "", ...}'
-                      value={createData}
-                      onChange={(e) => setCreateData(e.target.value)}
-                      rows={15}
-                      className="font-mono text-sm"
-                    />
-                    <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                      <div className="flex items-start gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                        <div className="text-sm text-green-800">
-                          <strong>Tip:</strong> Fill in the values for each field. Leave empty ("") for fields you don't need.
-                          The record will be added to your table once created.
-                        </div>
+              <div className="space-y-2">
+                <Label>Manual JSON Input</Label>
+                <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Paste JSON Data
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Upload JSON Data</DialogTitle>
+                      <DialogDescription>Paste your JSON data below (single object or array)</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <Textarea
+                        placeholder='{"AREA": "Colombo Metro", "BP CODE": 803567, ...}'
+                        value={jsonInput}
+                        onChange={(e) => setJsonInput(e.target.value)}
+                        rows={15}
+                        className="font-mono text-sm"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsUploadModalOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleManualUpload} disabled={uploadLoading}>
+                          {uploadLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          Upload Data
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleCreateRecord} disabled={createLoading} className="bg-green-600 hover:bg-green-700">
-                        {createLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                        Create Record
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <p className="text-xs text-muted-foreground">Create individual records</p>
-            </div>
-          </div>
+                  </DialogContent>
+                </Dialog>
+                <p className="text-xs text-muted-foreground">Paste JSON data manually</p>
+              </div>
 
-          <div className="bg-blue-100 p-3 rounded-lg">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div className="text-sm text-blue-800">
-                <strong>Supported formats:</strong> Single JSON object or array of objects. The structure is flexible
-                and will adapt to your data fields automatically.
+              <div className="space-y-2">
+                <Label>Create Single Record</Label>
+                <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full bg-green-50 border-green-200 hover:bg-green-100">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Create New Record
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Create New Record</DialogTitle>
+                      <DialogDescription>
+                        Create a new record by filling in the JSON template below
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">
+                          Pre-filled template with standard fields
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCreateData(JSON.stringify(getRecordTemplate(), null, 2))}
+                        >
+                          Reset Template
+                        </Button>
+                      </div>
+                      <Textarea
+                        placeholder='{"AREA": "", "BP CODE": "", ...}'
+                        value={createData}
+                        onChange={(e) => setCreateData(e.target.value)}
+                        rows={15}
+                        className="font-mono text-sm"
+                      />
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                          <div className="text-sm text-green-800">
+                            <strong>Tip:</strong> Fill in the values for each field. Leave empty ("") for fields you don't need.
+                            The record will be added to your table once created.
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleCreateRecord} disabled={createLoading} className="bg-green-600 hover:bg-green-700">
+                          {createLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                          Create Record
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <p className="text-xs text-muted-foreground">Create individual records</p>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+
+            <div className="bg-blue-100 p-3 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <strong>Supported formats:</strong> Single JSON object or array of objects. The structure is flexible
+                  and will adapt to your data fields automatically.
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -764,18 +981,37 @@ export default function JsonDataPage() {
         </Card>
       </div>
 
-      {/* Search and Actions */}
+      {/* Enhanced Search and Actions */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Search & Actions
+            Advanced Search & Actions
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
+            <Select value={searchType} onValueChange={setSearchType}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Search by..." />
+              </SelectTrigger>
+              <SelectContent>
+                {searchTypes.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Input
-              placeholder="Search by BP Name, Dealer Name, Outlet Name, NIC, Area..."
+              placeholder={
+                searchType === "nic" ? "Search by NIC Number..." :
+                searchType === "name" ? "Search by BP/Dealer/Outlet names..." :
+                searchType === "area" ? "Search by Area..." :
+                searchType === "classification" ? "Search by Classification..." :
+                searchType === "contact" ? "Search by Contact Number..." :
+                "Search all fields..."
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyPress={(e) => e.key === "Enter" && handleSearch()}
@@ -784,7 +1020,7 @@ export default function JsonDataPage() {
             <Button onClick={handleSearch} disabled={loading}>
               <Search className="h-4 w-4" />
             </Button>
-            <Button onClick={() => fetchData(currentPage, searchTerm)} variant="outline" disabled={loading}>
+            <Button onClick={() => fetchData(currentPage, searchTerm, searchType)} variant="outline" disabled={loading}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -823,6 +1059,11 @@ export default function JsonDataPage() {
               visibleColumns={visibleColumns}
               setVisibleColumns={setVisibleColumns}
             />
+            {searchType !== "all" && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                Searching: {searchTypes.find(t => t.value === searchType)?.label}
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -840,7 +1081,7 @@ export default function JsonDataPage() {
         </CardHeader>
         <CardContent>
           {data.length > 0 && (
-            <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm flex items-center gap-2  text-black">
+            <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm flex items-center gap-2 text-black">
               <AlertCircle className="h-4 w-4 text-blue-600" />
               <span>
                 Showing {visibleColumns.length} of {getDisplayFields().length} columns. Use the "Columns" button to
@@ -884,7 +1125,6 @@ export default function JsonDataPage() {
                 </thead>
                 <tbody>
                   {data.map((record, index) => {
-                    // Ensure record is a valid object with _id
                     if (!record || typeof record !== 'object' || !record._id) {
                       console.warn("Invalid record at index", index, record)
                       return null
@@ -944,7 +1184,7 @@ export default function JsonDataPage() {
                             <Button 
                               variant="destructive" 
                               size="sm" 
-                              onClick={() => handleDelete(record._id)}
+                              onClick={() => confirmDelete(record._id, record)}
                               className="hover:bg-red-100"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -971,7 +1211,7 @@ export default function JsonDataPage() {
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1 || loading}
-                  onClick={() => fetchData(currentPage - 1, searchTerm)}
+                  onClick={() => fetchData(currentPage - 1, searchTerm, searchType)}
                 >
                   Previous
                 </Button>
@@ -979,7 +1219,7 @@ export default function JsonDataPage() {
                   variant="outline"
                   size="sm"
                   disabled={currentPage === totalPages || loading}
-                  onClick={() => fetchData(currentPage + 1, searchTerm)}
+                  onClick={() => fetchData(currentPage + 1, searchTerm, searchType)}
                 >
                   Next
                 </Button>
@@ -988,6 +1228,14 @@ export default function JsonDataPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Modal with CAPTCHA */}
+      <DeleteConfirmation
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        recordInfo={deleteRecordInfo}
+      />
 
       {/* Debug Modal */}
       <Dialog open={isDebugModalOpen} onOpenChange={setIsDebugModalOpen}>
@@ -1013,125 +1261,100 @@ export default function JsonDataPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Modal */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-green-600" />
-              Create New Record
-            </DialogTitle>
-            <DialogDescription>
-              Fill in the JSON template below to create a new record. All fields are optional.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-muted-foreground">
-                <strong>Quick Actions:</strong>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCreateData(JSON.stringify(getRecordTemplate(), null, 2))}
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Reset Template
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    try {
-                      const parsed = JSON.parse(createData)
-                      setCreateData(JSON.stringify(parsed, null, 2))
-                    } catch (e) {
-                      alert("Invalid JSON format")
-                    }
-                  }}
-                >
-                  Format JSON
-                </Button>
-              </div>
-            </div>
-            
-            <Textarea
-              placeholder='{"AREA": "", "BP CODE": "", ...}'
-              value={createData}
-              onChange={(e) => setCreateData(e.target.value)}
-              rows={18}
-              className="font-mono text-sm"
-            />
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                  <div className="text-sm text-green-800">
-                    <strong>Tips:</strong>
-                    <ul className="mt-1 list-disc list-inside space-y-1">
-                      <li>Fill in values for each field you want to include</li>
-                      <li>Leave fields empty ("") if not needed</li>
-                      <li>Use proper JSON format with quotes around strings</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div className="text-sm text-blue-800">
-                    <strong>Standard Fields:</strong>
-                    <ul className="mt-1 text-xs space-y-1">
-                      <li>• AREA, BP CODE, BP NAME</li>
-                      <li>• OUTLET CODE, OUTLET NAME</li>
-                      <li>• CLASSIFICATION, DEALER NAME</li>
-                      <li>• NICNUMBER, CONTACTNO</li>
-                      <li>• EVENT DATE, HOTEL</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateRecord} disabled={createLoading} className="bg-green-600 hover:bg-green-700">
-                {createLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <UserPlus className="h-4 w-4 mr-2" />
-                )}
-                Create Record
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Modal */}
+      {/* Enhanced Edit Modal with Form Fields */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Record</DialogTitle>
-            <DialogDescription>Modify the JSON data for this record</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-600" />
+              Edit Record
+            </DialogTitle>
+            <DialogDescription>
+              Update the record information using the form below
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Textarea
-              value={editData}
-              onChange={(e) => setEditData(e.target.value)}
-              rows={20}
-              className="font-mono text-sm"
-            />
-            <div className="flex justify-end gap-2">
+            {selectedRecord && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto p-1">
+                {getDisplayFields().map((field) => (
+                  <div key={field} className="space-y-2">
+                    <Label htmlFor={field} className="text-sm font-medium">
+                      {columnDisplayNames[field] || field}
+                    </Label>
+                    {field === "CLASSIFICATION" ? (
+                      <Select
+                        value={editData[field] || ""}
+                        onValueChange={(value) => setEditData({ ...editData, [field]: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select classification..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PLATINUM">Platinum</SelectItem>
+                          <SelectItem value="GOLD">Gold</SelectItem>
+                          <SelectItem value="SILVER">Silver</SelectItem>
+                          <SelectItem value="BRONZE">Bronze</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : field === "EVENT DATE" ? (
+                      <Input
+                        id={field}
+                        type="date"
+                        value={editData[field] || ""}
+                        onChange={(e) => setEditData({ ...editData, [field]: e.target.value })}
+                        className="w-full"
+                      />
+                    ) : field === "CONTACTNO" || field === "NICNUMBER" ? (
+                      <Input
+                        id={field}
+                        type="text"
+                        value={editData[field] || ""}
+                        onChange={(e) => setEditData({ ...editData, [field]: e.target.value })}
+                        className="font-mono"
+                        placeholder={field === "CONTACTNO" ? "Enter contact number" : "Enter NIC number"}
+                      />
+                    ) : field === "BP CODE" || field === "OUTLETCODE" ? (
+                      <Input
+                        id={field}
+                        type="number"
+                        value={editData[field] || ""}
+                        onChange={(e) => setEditData({ ...editData, [field]: e.target.value })}
+                        placeholder={`Enter ${field.toLowerCase()}`}
+                      />
+                    ) : (
+                      <Input
+                        id={field}
+                        type="text"
+                        value={editData[field] || ""}
+                        onChange={(e) => setEditData({ ...editData, [field]: e.target.value })}
+                        placeholder={`Enter ${(columnDisplayNames[field] || field).toLowerCase()}`}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold">Preview JSON:</h4>
+                <Badge variant="outline" className="text-xs">
+                  Auto-updated as you type
+                </Badge>
+              </div>
+              <pre className="bg-gray-100 p-4 rounded-lg overflow-auto font-mono max-h-32 text-black text-xs">
+                {JSON.stringify(editData, null, 2)}
+              </pre>
+            </div>
+            
+            <div className="flex justify-end gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleEdit}>Update Record</Button>
+              <Button onClick={handleEdit} className="bg-blue-600 hover:bg-blue-700">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Update Record
+              </Button>
             </div>
           </div>
         </DialogContent>

@@ -3,23 +3,29 @@ import clientPromise from "@/lib/mongodb-client"
 import puppeteer from 'puppeteer'
 import outletData from '@/public/mpdata.json'; 
 
-const TEST_EVENT_DB = "test_event_registration"
-const TEST_REGISTRATIONS_COLLECTION = "test_registrations"
+const TEST_EVENT_DB = "event_registration"
+const TEST_REGISTRATIONS_COLLECTION = "registrations"
 
-// Create a NIC to outlet code mapping
+// Create mappings for both BP Code and Outlet Code
+const nicToBPCodeMap = new Map<string, string>();
+const phoneToBPCodeMap = new Map<string, string>();
 const nicToOutletCodeMap = new Map<string, string>();
 const phoneToOutletCodeMap = new Map<string, string>();
 
 (outletData.dealers || []).forEach((outlet: any) => {
   if (outlet.NICNUMBER) {
-    // Convert NIC to string and normalize case (uppercase for consistency)
     const nicString = String(outlet.NICNUMBER).toUpperCase().trim();
-    nicToOutletCodeMap.set(nicString, outlet["BP CODE"] || "N/A");
+    // Map to BP Code
+    nicToBPCodeMap.set(nicString, outlet["BP CODE"] || "N/A");
+    // Map to Outlet Code (assuming there's an OUTLET_CODE field, adjust as needed)
+    nicToOutletCodeMap.set(nicString, outlet["OUTLET CODE"] || outlet["CODE"] || outlet["OUTLET CODE"] || "N/A");
   }
   if (outlet.CONTACTNO) {
-    // Convert phone number to string and remove any non-digit characters for matching
     const phone = String(outlet.CONTACTNO).replace(/\D/g, '');
-    phoneToOutletCodeMap.set(phone, outlet["BP CODE"] || "N/A");
+    // Map to BP Code
+    phoneToBPCodeMap.set(phone, outlet["BP CODE"] || "N/A");
+    // Map to Outlet Code
+    phoneToOutletCodeMap.set(phone, outlet["OUTLET CODE"] || outlet["CODE"] || outlet["OUTLET CODE"] || "N/A");
   }
 });
 
@@ -55,38 +61,47 @@ export async function GET(req: NextRequest) {
       collection.countDocuments(query),
     ])
 
-    // Enhance registrations with outlet code - FIXED VERSION
-    type RegistrationWithOutlet = typeof registrations[number] & { outletCode: string };
-    const enhancedRegistrations: RegistrationWithOutlet[] = registrations.map(reg => {
+    // Enhance registrations with both BP Code and Outlet Code
+    type RegistrationWithCodes = typeof registrations[number] & { 
+      bpCode: string;
+      outletCode: string;
+    };
+    
+    const enhancedRegistrations: RegistrationWithCodes[] = registrations.map(reg => {
+      let bpCode = "N/A";
       let outletCode = "N/A";
       
-      // Try NIC first
+      // Try NIC first for both codes
       if (reg.dealerInfo?.ownerNIC) {
-        // Ensure NIC is treated as string and normalize case for lookup
         const nicString = String(reg.dealerInfo.ownerNIC).toUpperCase().trim();
+        bpCode = nicToBPCodeMap.get(nicString) || "N/A";
         outletCode = nicToOutletCodeMap.get(nicString) || "N/A";
         
-        // Debug logging (remove in production)
-        console.log(`NIC Lookup - Original: ${reg.dealerInfo.ownerNIC}, Normalized: ${nicString}, Found: ${outletCode}`);
+        console.log(`NIC Lookup - Original: ${reg.dealerInfo.ownerNIC}, BP Code: ${bpCode}, Outlet Code: ${outletCode}`);
       }
       
       // If NIC lookup failed, try phone number as fallback
-      if (outletCode === "N/A" && reg.dealerInfo?.contactNo) {
+      if ((bpCode === "N/A" || outletCode === "N/A") && reg.dealerInfo?.contactNo) {
         const phoneString = String(reg.dealerInfo.contactNo).replace(/\D/g, '');
-        outletCode = phoneToOutletCodeMap.get(phoneString) || "N/A";
+        if (bpCode === "N/A") {
+          bpCode = phoneToBPCodeMap.get(phoneString) || "N/A";
+        }
+        if (outletCode === "N/A") {
+          outletCode = phoneToOutletCodeMap.get(phoneString) || "N/A";
+        }
         
-        // Debug logging (remove in production)
-        console.log(`Phone Lookup - Original: ${reg.dealerInfo.contactNo}, Normalized: ${phoneString}, Found: ${outletCode}`);
+        console.log(`Phone Lookup - Original: ${reg.dealerInfo.contactNo}, BP Code: ${bpCode}, Outlet Code: ${outletCode}`);
       }
       
       return {
         ...reg,
+        bpCode,
         outletCode
       };
     });
 
     if (format === "csv") {
-      // Update CSV headers and rows
+      // Updated CSV headers to include both codes
       const csvHeaders = [
         "ID",
         "Owner Name",
@@ -96,6 +111,7 @@ export async function GET(req: NextRequest) {
         "Event",
         "Classification",
         "BP Code",
+        "Outlet Code",
         "Golden Pass",
         "Registered Date",
       ]
@@ -108,6 +124,7 @@ export async function GET(req: NextRequest) {
         reg.dealerInfo?.contactNo || "N/A",
         reg.dealerInfo?.event || "N/A",
         reg.dealerInfo?.classification || "N/A",
+        reg.bpCode,
         reg.outletCode,
         reg.goldenPass || "No Pass",
         reg.registeredAt ? new Date(reg.registeredAt).toLocaleDateString() : "N/A",
@@ -253,12 +270,12 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
           width: 100%; 
           border-collapse: collapse; 
           margin: 20px 0; 
-          font-size: 10px;
+          font-size: 9px;
         }
         
         th, td { 
           border: 1px solid #e2e8f0; 
-          padding: 6px 4px; 
+          padding: 4px 3px; 
           text-align: left; 
         }
         
@@ -266,7 +283,7 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
           background: #3b82f6;
           color: white;
           font-weight: 600;
-          font-size: 9px;
+          font-size: 8px;
         }
         
         tr:nth-child(even) {
@@ -279,7 +296,7 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
           padding: 2px 4px;
           border-radius: 3px;
           font-weight: 600;
-          font-size: 8px;
+          font-size: 7px;
         }
         
         .no-golden-pass {
@@ -287,16 +304,25 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
           color: #6b7280;
           padding: 2px 4px;
           border-radius: 3px;
-          font-size: 8px;
+          font-size: 7px;
         }
         
-        .outlet-code {
+        .bp-code {
           background: #10b981;
           color: white;
           padding: 2px 4px;
           border-radius: 3px;
           font-weight: 600;
-          font-size: 8px;
+          font-size: 7px;
+        }
+        
+        .outlet-code {
+          background: #8b5cf6;
+          color: white;
+          padding: 2px 4px;
+          border-radius: 3px;
+          font-weight: 600;
+          font-size: 7px;
         }
         
         .footer { 
@@ -347,6 +373,7 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
             <th>Event</th>
             <th>Classification</th>
             <th>BP Code</th>
+            <th>Outlet Code</th>
             <th>Golden Pass</th>
             <th>Registered</th>
           </tr>
@@ -363,6 +390,11 @@ async function generatePDFHTML(registrations: any[], totalCount: number, search?
               <td>${reg.dealerInfo?.contactNo || "N/A"}</td>
               <td>${reg.dealerInfo?.event || "N/A"}</td>
               <td>${reg.dealerInfo?.classification || "N/A"}</td>
+              <td>${
+                reg.bpCode !== "N/A"
+                  ? `<span class="bp-code">${reg.bpCode}</span>`
+                  : "N/A"
+              }</td>
               <td>${
                 reg.outletCode !== "N/A"
                   ? `<span class="outlet-code">${reg.outletCode}</span>`
