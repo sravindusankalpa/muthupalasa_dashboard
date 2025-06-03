@@ -29,12 +29,8 @@ export default function CrudPage() {
           </a>
         </Button>
       </div>
-      <Tabs defaultValue="test-registrations" className="space-y-4">
+      <Tabs defaultValue="kiosk-submissions" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="test-registrations" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Test Registrations
-          </TabsTrigger>
           <TabsTrigger value="kiosk-submissions" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Kiosk Submissions
@@ -42,6 +38,10 @@ export default function CrudPage() {
           <TabsTrigger value="processed-images" className="flex items-center gap-2">
             <ImageIcon className="h-4 w-4" />
             Processed Images
+          </TabsTrigger>
+          <TabsTrigger value="test-registrations" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Registrations
           </TabsTrigger>
           <TabsTrigger value="custom" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -51,9 +51,9 @@ export default function CrudPage() {
 
         <TabsContent value="test-registrations">
           <CrudInterface
-            database="test_event_registration"
-            collection="test_registrations"
-            title="Test Registrations"
+            database="event_registration"
+            collection="registrations"
+            title="Registrations"
             description="Manage user registrations from the test event registration database"
           />
         </TabsContent>

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Edit, Plus, Search, RefreshCw, Eye } from "lucide-react"
+import { Trash2, Edit, Plus, Search, RefreshCw, Eye, Download, Image } from "lucide-react"
 
 interface Document {
   _id: string
@@ -36,12 +36,15 @@ export function CrudInterface({ database, collection, title, description }: Crud
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isImageSelectModalOpen, setIsImageSelectModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
   const [newDocumentData, setNewDocumentData] = useState("")
   const [editDocumentData, setEditDocumentData] = useState("")
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set())
+  const [imageSelectDocument, setImageSelectDocument] = useState<Document | null>(null)
 
   const fetchDocuments = async (page = 1, search = "") => {
     setLoading(true)
@@ -154,6 +157,88 @@ export function CrudInterface({ database, collection, title, description }: Crud
     }
   }
 
+  const downloadImage = async (doc: Document, imageType?: 'imageUrl' | 'originalImageUrl' | 'backgroundMergedImage') => {
+    let imageUrl: string
+    let filename: string
+    
+    if (collection === "processed-images") {
+      if (!imageType) {
+        // Open selection modal for processed-images
+        setImageSelectDocument(doc)
+        setIsImageSelectModalOpen(true)
+        return
+      }
+      
+      imageUrl = getDisplayValue(doc, imageType)
+      const nic = getDisplayValue(doc, "nic")
+      filename = `${nic}_${imageType}`
+    } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+      // For EventDaySubmission, download backgroundMergedImage
+      imageUrl = getDisplayValue(doc, "eventuserdata.backgroundMergedImage")
+      const nic = getDisplayValue(doc, "eventuserdata.ownerNIC")
+      filename = `${nic}`
+    } else {
+      // Fallback for other collections
+      imageUrl = getDisplayValue(doc, "imageUrl")
+      const nic = getDisplayValue(doc, "nic")
+      filename = `${nic}`
+    }
+    
+    if (!imageUrl || imageUrl === "N/A") {
+      alert("Image URL not available")
+      return
+    }
+
+    setDownloadingIds(prev => new Set(prev).add(doc._id))
+
+    try {
+      // Fetch the image
+      const response = await fetch(imageUrl)
+      if (!response.ok) {
+        throw new Error("Failed to fetch image")
+      }
+
+      const blob = await response.blob()
+      
+      // Get file extension from URL or use default
+      const urlParts = imageUrl.split('.')
+      const extension = urlParts.length > 1 ? urlParts[urlParts.length - 1].split('?')[0] : 'jpg'
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = url
+      a.download = `${filename}.${extension}`
+      
+      // Trigger download
+      document.body.appendChild(a)
+      a.click()
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+    } catch (error) {
+      console.error('Download failed:', error)
+      alert("Failed to download image")
+    } finally {
+      setDownloadingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(doc._id)
+        return newSet
+      })
+    }
+  }
+
+  const handleImageSelection = (imageType: 'imageUrl' | 'originalImageUrl') => {
+    if (imageSelectDocument) {
+      downloadImage(imageSelectDocument, imageType)
+    }
+    setIsImageSelectModalOpen(false)
+    setImageSelectDocument(null)
+  }
+
   const handleSearch = () => {
     setCurrentPage(1)
     fetchDocuments(1, searchTerm)
@@ -179,9 +264,9 @@ export function CrudInterface({ database, collection, title, description }: Crud
   }
 
   const renderTableHeaders = () => {
-    if (collection === "test_registrations") {
+    if (collection === "registrations") {
       return (
-        <tr>
+        <tr className="text-black">
           <th className="px-4 py-2 text-left">ID</th>
           <th className="px-4 py-2 text-left">Owner Name</th>
           <th className="px-4 py-2 text-left">NIC</th>
@@ -191,9 +276,9 @@ export function CrudInterface({ database, collection, title, description }: Crud
           <th className="px-4 py-2 text-left">Actions</th>
         </tr>
       )
-    } else if (collection.includes("EventDaySubmission") || collection.includes("MP1")) {
+    } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
       return (
-        <tr>
+        <tr className="text-black">
           <th className="px-4 py-2 text-left">ID</th>
           <th className="px-4 py-2 text-left">Owner Name</th>
           <th className="px-4 py-2 text-left">NIC</th>
@@ -206,7 +291,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
       )
     } else if (collection === "processed-images") {
       return (
-        <tr>
+        <tr className="text-black">
           <th className="px-4 py-2 text-left">ID</th>
           <th className="px-4 py-2 text-left">NIC</th>
           <th className="px-4 py-2 text-left">Image URL</th>
@@ -216,7 +301,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
       )
     } else {
       return (
-        <tr>
+        <tr className="text-black">
           <th className="px-4 py-2 text-left">ID</th>
           <th className="px-4 py-2 text-left">Data</th>
           <th className="px-4 py-2 text-left">Actions</th>
@@ -226,9 +311,9 @@ export function CrudInterface({ database, collection, title, description }: Crud
   }
 
   const renderTableRow = (doc: Document) => {
-    if (collection === "test_registrations") {
+    if (collection === "registrations") {
       return (
-        <tr key={doc._id} className="border-b hover:bg-gray-50">
+        <tr key={doc._id} className="border-b hover:bg-gray-50/30">
           <td className="px-4 py-2 text-sm font-mono">{doc._id.toString().substring(0, 8)}...</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "dealerInfo.ownerName")}</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "dealerInfo.ownerNIC")}</td>
@@ -252,9 +337,12 @@ export function CrudInterface({ database, collection, title, description }: Crud
           </td>
         </tr>
       )
-    } else if (collection.includes("EventDaySubmission") || collection.includes("MP1")) {
+    } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+      const hasBackgroundImage = getDisplayValue(doc, "eventuserdata.backgroundMergedImage") && getDisplayValue(doc, "eventuserdata.backgroundMergedImage") !== "N/A"
+      const isDownloading = downloadingIds.has(doc._id)
+      
       return (
-        <tr key={doc._id} className="border-b hover:bg-gray-50">
+        <tr key={doc._id} className="border-b hover:bg-gray-50/30">
           <td className="px-4 py-2 text-sm font-mono">{doc._id.toString().substring(0, 8)}...</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerName")}</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerNIC")}</td>
@@ -272,6 +360,21 @@ export function CrudInterface({ database, collection, title, description }: Crud
               <Button variant="outline" size="sm" onClick={() => openEditModal(doc)}>
                 <Edit className="h-3 w-3" />
               </Button>
+              {hasBackgroundImage && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => downloadImage(doc)}
+                  disabled={isDownloading}
+                  title="Download background merged image"
+                >
+                  {isDownloading ? (
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                  ) : (
+                    <Image className="h-3 w-3" />
+                  )}
+                </Button>
+              )}
               <Button variant="destructive" size="sm" onClick={() => deleteDocument(doc._id)}>
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -280,12 +383,16 @@ export function CrudInterface({ database, collection, title, description }: Crud
         </tr>
       )
     } else if (collection === "processed-images") {
+      const hasImage = (getDisplayValue(doc, "imageUrl") && getDisplayValue(doc, "imageUrl") !== "N/A") || 
+                      (getDisplayValue(doc, "originalImageUrl") && getDisplayValue(doc, "originalImageUrl") !== "N/A")
+      const isDownloading = downloadingIds.has(doc._id)
+      
       return (
-        <tr key={doc._id} className="border-b hover:bg-gray-50">
+        <tr key={doc._id} className="border-b hover:bg-gray-50/30">
           <td className="px-4 py-2 text-sm font-mono">{doc._id.toString().substring(0, 8)}...</td>
-          <td className="px-4 py-2">{getDisplayValue(doc, "nic")}</td>
+          <td className="px-4 py-2 font-medium">{getDisplayValue(doc, "nic")}</td>
           <td className="px-4 py-2">
-            {getDisplayValue(doc, "imageUrl") ? (
+            {hasImage ? (
               <Badge variant="default">Available</Badge>
             ) : (
               <Badge variant="secondary">N/A</Badge>
@@ -300,6 +407,21 @@ export function CrudInterface({ database, collection, title, description }: Crud
               <Button variant="outline" size="sm" onClick={() => openEditModal(doc)}>
                 <Edit className="h-3 w-3" />
               </Button>
+              {hasImage && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => downloadImage(doc)}
+                  disabled={isDownloading}
+                  title="Download image (select type)"
+                >
+                  {isDownloading ? (
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                  ) : (
+                    <Download className="h-3 w-3" />
+                  )}
+                </Button>
+              )}
               <Button variant="destructive" size="sm" onClick={() => deleteDocument(doc._id)}>
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -316,7 +438,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
         .join(", ")
 
       return (
-        <tr key={doc._id} className="border-b hover:bg-gray-50">
+        <tr key={doc._id} className="border-b hover:bg-gray-50/30">
           <td className="px-4 py-2 text-sm font-mono">{doc._id.toString().substring(0, 8)}...</td>
           <td className="px-4 py-2">{preview}...</td>
           <td className="px-4 py-2">
@@ -487,6 +609,45 @@ export function CrudInterface({ database, collection, title, description }: Crud
               <div className="flex justify-end">
                 <Button variant="outline" onClick={() => setIsViewModalOpen(false)}>
                   Close
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Image Selection Modal for Processed Images */}
+        <Dialog open={isImageSelectModalOpen} onOpenChange={setIsImageSelectModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Select Image to Download</DialogTitle>
+              <DialogDescription>Choose which image you want to download</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                {imageSelectDocument && getDisplayValue(imageSelectDocument, "imageUrl") && getDisplayValue(imageSelectDocument, "imageUrl") !== "N/A" && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleImageSelection('imageUrl')}
+                    className="justify-start"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Processed Image (imageUrl)
+                  </Button>
+                )}
+                {imageSelectDocument && getDisplayValue(imageSelectDocument, "originalImageUrl") && getDisplayValue(imageSelectDocument, "originalImageUrl") !== "N/A" && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleImageSelection('originalImageUrl')}
+                    className="justify-start"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Original Image (originalImageUrl)
+                  </Button>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setIsImageSelectModalOpen(false)}>
+                  Cancel
                 </Button>
               </div>
             </div>
