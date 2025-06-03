@@ -354,12 +354,6 @@ export function CrudInterface({ database, collection, title, description }: Crud
           <td className="px-4 py-2 text-sm">{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "N/A"}</td>
           <td className="px-4 py-2">
             <div className="flex gap-1">
-              <Button variant="outline" size="sm" onClick={() => openViewModal(doc)}>
-                <Eye className="h-3 w-3" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => openEditModal(doc)}>
-                <Edit className="h-3 w-3" />
-              </Button>
               {hasBackgroundImage && (
                 <Button 
                   variant="outline" 
@@ -375,6 +369,12 @@ export function CrudInterface({ database, collection, title, description }: Crud
                   )}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => openViewModal(doc)}>
+                <Eye className="h-3 w-3" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => openEditModal(doc)}>
+                <Edit className="h-3 w-3" />
+              </Button>
               <Button variant="destructive" size="sm" onClick={() => deleteDocument(doc._id)}>
                 <Trash2 className="h-3 w-3" />
               </Button>
