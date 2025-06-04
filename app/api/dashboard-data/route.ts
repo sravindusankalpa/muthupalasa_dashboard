@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb-client"
 
 // Database configurations
-const TEST_EVENT_DB = "test_event_registration"
-const TEST_REGISTRATIONS_COLLECTION = "test_registrations"
+const TEST_EVENT_DB = "event_registration"
+const TEST_REGISTRATIONS_COLLECTION = "registrations"
 const BACKGROUND_REMOVAL_DB = "background-removal"
 const PROCESSED_IMAGES_COLLECTION = "processed-images"
 const KIOSK_DB = "muthupalasa_kiosk"
