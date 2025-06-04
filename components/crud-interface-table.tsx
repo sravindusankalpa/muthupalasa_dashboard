@@ -23,7 +23,6 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, Edit, Plus, Search, RefreshCw, Eye, Download, Image, Trophy, Filter } from "lucide-react"
-import { get } from "http"
 
 interface Document {
   _id: string
@@ -444,6 +443,50 @@ export function CrudInterface({ database, collection, title, description }: Crud
     setIsViewModalOpen(true)
   }
 
+  const downloadWinnersCSV = () => {
+    if (winners.length === 0) {
+      alert("No winners data to download")
+      return
+    }
+
+    // Prepare CSV headers
+    const headers = [
+      "Owner Name",
+      "NIC",
+      "Shop Name", 
+      "Golden Pass",
+      "Classification"
+    ]
+
+    // Prepare CSV data
+    const csvData = winners.map(doc => [
+      getDisplayValue(doc, "eventuserdata.ownerName"),
+      getDisplayValue(doc, "eventuserdata.ownerNIC"),
+      getDisplayValue(doc, "eventuserdata.shopName"),
+      getDisplayValue(doc, "eventuserdata.goldenPassNumber"),
+      getDisplayValue(doc, "eventuserdata.classification")
+    ])
+
+    // Combine headers and data
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob)
+      link.setAttribute("href", url)
+      link.setAttribute("download", `winners_${collection}_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = "hidden"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+  }
+
   const openWinnersModal = () => {
     setIsWinnersModalOpen(true)
     fetchWinners()
@@ -461,6 +504,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
     return path.split(".").reduce((current, key) => current?.[key], obj) || "N/A"
   }
 
+  // Move the table header rendering logic into a function
   const renderTableHeaders = () => {
     if (collection === "registrations") {
       return (
@@ -721,6 +765,18 @@ export function CrudInterface({ database, collection, title, description }: Crud
                     <DialogTitle className="flex items-center gap-2">
                       <Trophy className="h-5 w-5 text-yellow-500" />
                       Winners List
+                      <div className="ml-auto">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={downloadWinnersCSV}
+                          disabled={winnersLoading || winners.length === 0}
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download CSV
+                        </Button>
+                      </div>
                     </DialogTitle>
                     <DialogDescription>
                       List of all winners in {collection} - Total: {winners.length} winners
