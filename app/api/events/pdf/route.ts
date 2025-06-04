@@ -30,7 +30,7 @@ const EVENTS = [
   {
     name: "Start Club 2",
     location: "Kandalama",
-    collection: "startclub2-kandalama",
+    collection: "SC2_KANDALAMA",
     url: "https://muthupalasa.com/startclub2-kandalama",
   },
   {

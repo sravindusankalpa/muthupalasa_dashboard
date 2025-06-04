@@ -109,7 +109,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
         
         // Client-side classification filtering as fallback
         // This ensures filtering works even if backend doesn't support it yet
-        if (classification !== "all" && (collection.includes("EventDaySubmission") || collection.includes("SC1"))) {
+        if (classification !== "all" && (collection.includes("EventDaySubmission") || collection.includes("SC2"))) {
           filteredData = result.data.filter((doc: Document) => 
             getDisplayValue(doc, "eventuserdata.classification") === classification
           )
@@ -261,7 +261,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
       imageUrl = getDisplayValue(doc, imageType)
       const nic = getDisplayValue(doc, "nic")
       filename = `${nic}_${imageType}`
-    } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+    } else if (collection.includes("EventDaySubmission") || collection.includes("SC2")) {
       // For EventDaySubmission, download backgroundMergedImage
       imageUrl = getDisplayValue(doc, "eventuserdata.backgroundMergedImage")
       const nic = getDisplayValue(doc, "eventuserdata.ownerNIC")
@@ -381,7 +381,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
     setCurrentPage(1)
     
     // For client-side filtering, we need to fetch more data to filter properly
-    if (value !== "all" && (collection.includes("EventDaySubmission") || collection.includes("SC1"))) {
+    if (value !== "all" && (collection.includes("EventDaySubmission") || collection.includes("SC2"))) {
       // Fetch all data for this classification (temporary solution)
       fetchAllDocumentsForFilter(value)
     } else {
@@ -495,7 +495,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
   useEffect(() => {
     fetchDocuments()
     // Fetch classifications for filter dropdown
-    if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+    if (collection.includes("EventDaySubmission") || collection.includes("SC2")) {
       fetchClassifications()
     }
   }, [database, collection])
@@ -518,7 +518,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
           <th className="px-4 py-2 text-left">Actions</th>
         </tr>
       )
-    } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+    } else if (collection.includes("EventDaySubmission") || collection.includes("SC2")) {
       return (
         <tr className="text-black">
           <th className="px-4 py-2 text-left">ID</th>
@@ -580,7 +580,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
           </td>
         </tr>
       )
-    } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+    } else if (collection.includes("EventDaySubmission") || collection.includes("SC2")) {
       const hasBackgroundImage = getDisplayValue(doc, "eventuserdata.backgroundMergedImage") && getDisplayValue(doc, "eventuserdata.backgroundMergedImage") !== "N/A"
       const isDownloading = downloadingIds.has(doc._id)
       const isWinner = getDisplayValue(doc, "isWinner") === true || getDisplayValue(doc, "isWinner") === "true"
@@ -752,7 +752,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
         <CardTitle className="flex items-center justify-between">
           {title}
           <div className="flex gap-2">
-            {(collection.includes("EventDaySubmission") || collection.includes("SC1")) && (
+            {(collection.includes("EventDaySubmission") || collection.includes("SC2")) && (
               <Dialog open={isWinnersModalOpen} onOpenChange={setIsWinnersModalOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-black hover:text-black" onClick={openWinnersModal}>
@@ -856,7 +856,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
             </Button>
           </div>
           
-          {(collection.includes("EventDaySubmission") || collection.includes("SC1")) && (
+          {(collection.includes("EventDaySubmission") || collection.includes("SC2")) && (
             <div className="flex gap-2 items-center">
               <Filter className="h-4 w-4 text-muted-foreground" />
               <Select value={classificationFilter} onValueChange={handleClassificationFilter}>
