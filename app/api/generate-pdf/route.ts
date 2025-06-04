@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb-client"
 
 // Database configurations
-const TEST_EVENT_DB = "test_event_registration"
-const TEST_REGISTRATIONS_COLLECTION = "test_registrations"
+const TEST_EVENT_DB = "event_registration"
+const TEST_REGISTRATIONS_COLLECTION = "registrations"
 const BACKGROUND_REMOVAL_DB = "background-removal"
 const PROCESSED_IMAGES_COLLECTION = "processed-images"
 const KIOSK_DB = "muthupalasa_kiosk"
@@ -170,7 +170,6 @@ export async function GET(req: NextRequest) {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
               <th>Owner Name</th>
               <th>NIC</th>
               <th>Shop Name</th>
@@ -185,7 +184,6 @@ export async function GET(req: NextRequest) {
       registrations.forEach((reg) => {
         htmlContent += `
           <tr>
-            <td>${reg._id.toString().substring(0, 8)}...</td>
             <td>${reg.dealerInfo?.ownerName || "N/A"}</td>
             <td>${reg.dealerInfo?.ownerNIC || "N/A"}</td>
             <td>${reg.dealerInfo?.shopName || "N/A"}</td>
@@ -207,7 +205,6 @@ export async function GET(req: NextRequest) {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
               <th>Owner Name</th>
               <th>NIC</th>
               <th>Shop Name</th>
@@ -223,7 +220,6 @@ export async function GET(req: NextRequest) {
       submissions.forEach((sub) => {
         htmlContent += `
           <tr>
-            <td>${sub._id.toString().substring(0, 8)}...</td>
             <td>${sub.eventuserdata?.ownerName || "N/A"}</td>
             <td>${sub.eventuserdata?.ownerNIC || "N/A"}</td>
             <td>${sub.eventuserdata?.shopName || "N/A"}</td>
