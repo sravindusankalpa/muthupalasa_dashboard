@@ -755,10 +755,10 @@ export function CrudInterface({ database, collection, title, description }: Crud
             {(collection.includes("EventDaySubmission") || collection.includes("SC2")) && (
               <Dialog open={isWinnersModalOpen} onOpenChange={setIsWinnersModalOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-black hover:text-black" onClick={openWinnersModal}>
+                  {/* <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-black hover:text-black" onClick={openWinnersModal}>
                     <Trophy className="h-4 w-4 mr-2" />
                     View Winners
-                  </Button>
+                  </Button> */}
                 </DialogTrigger>
                 <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
