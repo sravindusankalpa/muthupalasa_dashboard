@@ -583,10 +583,10 @@ export function CrudInterface({ database, collection, title, description }: Crud
     } else if (collection.includes("EventDaySubmission") || collection.includes("SC2")) {
       const hasBackgroundImage = getDisplayValue(doc, "eventuserdata.backgroundMergedImage") && getDisplayValue(doc, "eventuserdata.backgroundMergedImage") !== "N/A"
       const isDownloading = downloadingIds.has(doc._id)
-      const isWinner = getDisplayValue(doc, "isWinner") === true || getDisplayValue(doc, "isWinner") === "true"
+      const isWinner = getDisplayValue(doc, "eventuserdata.isWinner") === true || getDisplayValue(doc, "eventuserdata.isWinner") === "true"
       
       return (
-        <tr key={doc._id} className={`border-b hover:bg-gray-50/30 ${isWinner ? 'bg-yellow-50' : ''}`}>
+        <tr key={doc._id} className={`border-b hover:bg-gray-50/30 ${isWinner ? 'bg-yellow-50/5' : ''}`}>
           <td className="px-4 py-2 text-sm font-mono">{doc._id.toString().substring(0, 8)}...</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerName")}</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerNIC")}</td>
