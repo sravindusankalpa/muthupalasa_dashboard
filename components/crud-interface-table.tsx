@@ -13,9 +13,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Edit, Plus, Search, RefreshCw, Eye, Download, Image } from "lucide-react"
+import { Trash2, Edit, Plus, Search, RefreshCw, Eye, Download, Image, Trophy, Filter } from "lucide-react"
+import { get } from "http"
 
 interface Document {
   _id: string
@@ -37,7 +45,9 @@ export function CrudInterface({ database, collection, title, description }: Crud
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isImageSelectModalOpen, setIsImageSelectModalOpen] = useState(false)
+  const [isWinnersModalOpen, setIsWinnersModalOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
+  const [classificationFilter, setClassificationFilter] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
@@ -45,8 +55,40 @@ export function CrudInterface({ database, collection, title, description }: Crud
   const [editDocumentData, setEditDocumentData] = useState("")
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set())
   const [imageSelectDocument, setImageSelectDocument] = useState<Document | null>(null)
+  const [winners, setWinners] = useState<Document[]>([])
+  const [winnersLoading, setWinnersLoading] = useState(false)
+  const [availableClassifications, setAvailableClassifications] = useState<string[]>([])
 
-  const fetchDocuments = async (page = 1, search = "") => {
+  // Fetch available classifications for filter dropdown
+  const fetchClassifications = async () => {
+    try {
+      // Fetch a larger sample of documents to extract classifications
+      const params = new URLSearchParams({
+        database,
+        collection,
+        page: "1",
+        limit: "1000", // Get more documents to extract all classifications
+      })
+
+      const response = await fetch(`/api/crud?${params}`)
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Extract unique classifications from the data
+        const classifications = [...new Set(
+          result.data
+            .map((doc: Document) => getDisplayValue(doc, "eventuserdata.classification"))
+            .filter((classification: string) => classification !== "N/A" && classification !== null && classification !== undefined)
+        )].sort()
+        
+        setAvailableClassifications(classifications as string[])
+      }
+    } catch (error) {
+      console.error("Failed to fetch classifications:", error)
+    }
+  }
+
+  const fetchDocuments = async (page = 1, search = "", classification = "all") => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -55,16 +97,40 @@ export function CrudInterface({ database, collection, title, description }: Crud
         page: page.toString(),
         limit: "20",
         ...(search && { search }),
+        // Only send classification to server if your API supports it
+        // Remove this line if your backend doesn't handle classification filtering yet
+        ...(classification !== "all" && { classification }),
       })
 
       const response = await fetch(`/api/crud?${params}`)
       const result = await response.json()
 
       if (result.success) {
-        setDocuments(result.data)
-        setTotalPages(result.pagination.pages)
-        setTotalRecords(result.pagination.total)
-        setCurrentPage(page)
+        let filteredData = result.data
+        
+        // Client-side classification filtering as fallback
+        // This ensures filtering works even if backend doesn't support it yet
+        if (classification !== "all" && (collection.includes("EventDaySubmission") || collection.includes("SC1"))) {
+          filteredData = result.data.filter((doc: Document) => 
+            getDisplayValue(doc, "eventuserdata.classification") === classification
+          )
+          
+          // For client-side filtering, we need to recalculate pagination
+          // This is a temporary solution until backend supports filtering
+          const totalFiltered = filteredData.length
+          const totalPagesFiltered = Math.ceil(totalFiltered / 20)
+          
+          setDocuments(filteredData)
+          setTotalPages(totalPagesFiltered)
+          setTotalRecords(totalFiltered)
+          setCurrentPage(1) // Reset to first page when filtering
+        } else {
+          // No filtering or server handled the filtering
+          setDocuments(filteredData)
+          setTotalPages(result.pagination.pages)
+          setTotalRecords(result.pagination.total)
+          setCurrentPage(page)
+        }
       } else {
         alert(result.message || "Failed to fetch documents")
       }
@@ -72,6 +138,30 @@ export function CrudInterface({ database, collection, title, description }: Crud
       alert("Failed to fetch documents")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchWinners = async () => {
+    setWinnersLoading(true)
+    try {
+      const params = new URLSearchParams({
+        database,
+        collection,
+        winners: "true", // Special flag to get only winners
+      })
+
+      const response = await fetch(`/api/crud?${params}`)
+      const result = await response.json()
+
+      if (result.success) {
+        setWinners(result.data)
+      } else {
+        alert(result.message || "Failed to fetch winners")
+      }
+    } catch (error) {
+      alert("Failed to fetch winners")
+    } finally {
+      setWinnersLoading(false)
     }
   }
 
@@ -92,7 +182,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
         alert("Document created successfully")
         setIsCreateModalOpen(false)
         setNewDocumentData("")
-        fetchDocuments(currentPage, searchTerm)
+        fetchDocuments(currentPage, searchTerm, classificationFilter)
       } else {
         alert(result.message || "Failed to create document")
       }
@@ -125,7 +215,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
         setIsEditModalOpen(false)
         setSelectedDocument(null)
         setEditDocumentData("")
-        fetchDocuments(currentPage, searchTerm)
+        fetchDocuments(currentPage, searchTerm, classificationFilter)
       } else {
         alert(result.message || "Failed to update document")
       }
@@ -148,7 +238,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
 
       if (result.success) {
         alert("Document deleted successfully")
-        fetchDocuments(currentPage, searchTerm)
+        fetchDocuments(currentPage, searchTerm, classificationFilter)
       } else {
         alert(result.message || "Failed to delete document")
       }
@@ -239,9 +329,108 @@ export function CrudInterface({ database, collection, title, description }: Crud
     setImageSelectDocument(null)
   }
 
+  // Handle pagination for client-side filtered data
+  const handleFilteredPagination = async (newPage: number) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        database,
+        collection,
+        page: "1",
+        limit: "1000", // Fetch enough data to handle pagination
+        ...(searchTerm && { search: searchTerm }),
+      })
+
+      const response = await fetch(`/api/crud?${params}`)
+      const result = await response.json()
+
+      if (result.success) {
+        // Filter documents by classification
+        const filteredData = result.data.filter((doc: Document) => 
+          getDisplayValue(doc, "eventuserdata.classification") === classificationFilter
+        )
+        
+        // Implement client-side pagination
+        const startIndex = (newPage - 1) * 20
+        const endIndex = startIndex + 20
+        const paginatedData = filteredData.slice(startIndex, endIndex)
+        
+        const totalFiltered = filteredData.length
+        const totalPagesFiltered = Math.ceil(totalFiltered / 20)
+        
+        setDocuments(paginatedData)
+        setTotalPages(totalPagesFiltered)
+        setTotalRecords(totalFiltered)
+        setCurrentPage(newPage)
+      } else {
+        alert(result.message || "Failed to fetch documents")
+      }
+    } catch (error) {
+      alert("Failed to fetch documents")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSearch = () => {
     setCurrentPage(1)
-    fetchDocuments(1, searchTerm)
+    fetchDocuments(1, searchTerm, classificationFilter)
+  }
+
+  const handleClassificationFilter = (value: string) => {
+    setClassificationFilter(value)
+    setCurrentPage(1)
+    
+    // For client-side filtering, we need to fetch more data to filter properly
+    if (value !== "all" && (collection.includes("EventDaySubmission") || collection.includes("SC1"))) {
+      // Fetch all data for this classification (temporary solution)
+      fetchAllDocumentsForFilter(value)
+    } else {
+      fetchDocuments(1, searchTerm, value)
+    }
+  }
+
+  // Temporary function to handle client-side filtering with pagination
+  const fetchAllDocumentsForFilter = async (classification: string) => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        database,
+        collection,
+        page: "1",
+        limit: "1000", // Fetch more documents to filter client-side
+        ...(searchTerm && { search: searchTerm }),
+      })
+
+      const response = await fetch(`/api/crud?${params}`)
+      const result = await response.json()
+
+      if (result.success) {
+        // Filter documents by classification
+        const filteredData = result.data.filter((doc: Document) => 
+          getDisplayValue(doc, "eventuserdata.classification") === classification
+        )
+        
+        // Implement client-side pagination
+        const startIndex = (currentPage - 1) * 20
+        const endIndex = startIndex + 20
+        const paginatedData = filteredData.slice(startIndex, endIndex)
+        
+        const totalFiltered = filteredData.length
+        const totalPagesFiltered = Math.ceil(totalFiltered / 20)
+        
+        setDocuments(paginatedData)
+        setTotalPages(totalPagesFiltered)
+        setTotalRecords(totalFiltered)
+        setCurrentPage(1)
+      } else {
+        alert(result.message || "Failed to fetch documents")
+      }
+    } catch (error) {
+      alert("Failed to fetch documents")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openEditModal = (document: Document) => {
@@ -255,8 +444,17 @@ export function CrudInterface({ database, collection, title, description }: Crud
     setIsViewModalOpen(true)
   }
 
+  const openWinnersModal = () => {
+    setIsWinnersModalOpen(true)
+    fetchWinners()
+  }
+
   useEffect(() => {
     fetchDocuments()
+    // Fetch classifications for filter dropdown
+    if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
+      fetchClassifications()
+    }
   }, [database, collection])
 
   const getDisplayValue = (obj: any, path: string) => {
@@ -285,6 +483,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
           <th className="px-4 py-2 text-left">Shop Name</th>
           <th className="px-4 py-2 text-left">Golden Pass</th>
           <th className="px-4 py-2 text-left">Classification</th>
+          <th className="px-4 py-2 text-left">Winner</th>
           <th className="px-4 py-2 text-left">Created At</th>
           <th className="px-4 py-2 text-left">Actions</th>
         </tr>
@@ -340,9 +539,10 @@ export function CrudInterface({ database, collection, title, description }: Crud
     } else if (collection.includes("EventDaySubmission") || collection.includes("SC1")) {
       const hasBackgroundImage = getDisplayValue(doc, "eventuserdata.backgroundMergedImage") && getDisplayValue(doc, "eventuserdata.backgroundMergedImage") !== "N/A"
       const isDownloading = downloadingIds.has(doc._id)
+      const isWinner = getDisplayValue(doc, "isWinner") === true || getDisplayValue(doc, "isWinner") === "true"
       
       return (
-        <tr key={doc._id} className="border-b hover:bg-gray-50/30">
+        <tr key={doc._id} className={`border-b hover:bg-gray-50/30 ${isWinner ? 'bg-yellow-50' : ''}`}>
           <td className="px-4 py-2 text-sm font-mono">{doc._id.toString().substring(0, 8)}...</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerName")}</td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerNIC")}</td>
@@ -351,6 +551,16 @@ export function CrudInterface({ database, collection, title, description }: Crud
             <Badge variant="outline">{getDisplayValue(doc, "eventuserdata.goldenPassNumber")}</Badge>
           </td>
           <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.classification")}</td>
+          <td className="px-4 py-2">
+            {isWinner ? (
+              <Badge variant="default" className="bg-yellow-500 text-white">
+                <Trophy className="h-3 w-3 mr-1" />
+                Winner
+              </Badge>
+            ) : (
+              <Badge variant="secondary">No</Badge>
+            )}
+          </td>
           <td className="px-4 py-2 text-sm">{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "N/A"}</td>
           <td className="px-4 py-2">
             <div className="flex gap-1">
@@ -398,7 +608,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
               <Badge variant="secondary">N/A</Badge>
             )}
           </td>
-          <td className="px-4 py-2 text-sm">{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "N/A"}</td>
+          <td className="px-4 py-2 text-sm">{doc.processedAt? new Date(doc.processedAt).toLocaleDateString() : "N/A"}</td>
           <td className="px-4 py-2">
             <div className="flex gap-1">
               <Button variant="outline" size="sm" onClick={() => openViewModal(doc)}>
@@ -459,12 +669,80 @@ export function CrudInterface({ database, collection, title, description }: Crud
     }
   }
 
+  const renderWinnersTable = () => {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-yellow-100">
+            <tr className="text-black">
+              <th className="px-4 py-2 text-left">Owner Name</th>
+              <th className="px-4 py-2 text-left">NIC</th>
+              <th className="px-4 py-2 text-left">Shop Name</th>
+              <th className="px-4 py-2 text-left">Golden Pass</th>
+              <th className="px-4 py-2 text-left">Classification</th>
+              <th className="px-4 py-2 text-left">Created At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {winners.map((doc) => (
+              <tr key={doc._id} className="border-b hover:bg-yellow-50/30">
+                <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerName")}</td>
+                <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.ownerNIC")}</td>
+                <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.shopName")}</td>
+                <td className="px-4 py-2">
+                  <Badge variant="outline">{getDisplayValue(doc, "eventuserdata.goldenPassNumber")}</Badge>
+                </td>
+                <td className="px-4 py-2">{getDisplayValue(doc, "eventuserdata.classification")}</td>
+                <td className="px-4 py-2 text-sm">{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : "N/A"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           {title}
           <div className="flex gap-2">
+            {(collection.includes("EventDaySubmission") || collection.includes("SC1")) && (
+              <Dialog open={isWinnersModalOpen} onOpenChange={setIsWinnersModalOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-black hover:text-black" onClick={openWinnersModal}>
+                    <Trophy className="h-4 w-4 mr-2" />
+                    View Winners
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5 text-yellow-500" />
+                      Winners List
+                    </DialogTitle>
+                    <DialogDescription>
+                      List of all winners in {collection} - Total: {winners.length} winners
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {winnersLoading ? (
+                      <div className="text-center py-8">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                        <p className="mt-2">Loading winners...</p>
+                      </div>
+                    ) : winners.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No winners found
+                      </div>
+                    ) : (
+                      renderWinnersTable()
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
             <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
@@ -497,7 +775,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
                 </div>
               </DialogContent>
             </Dialog>
-            <Button variant="outline" size="sm" onClick={() => fetchDocuments(currentPage, searchTerm)}>
+            <Button variant="outline" size="sm" onClick={() => fetchDocuments(currentPage, searchTerm, classificationFilter)}>
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
@@ -507,18 +785,56 @@ export function CrudInterface({ database, collection, title, description }: Crud
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Search */}
-        <div className="flex gap-2">
-          <Input
-            placeholder="Search by name, NIC, shop name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-          />
-          <Button onClick={handleSearch}>
-            <Search className="h-4 w-4" />
-          </Button>
+        {/* Search and Filter */}
+        <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-1 min-w-[300px]">
+            <Input
+              placeholder="Search by name, NIC, shop name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+              className="flex-1"
+            />
+            <Button onClick={handleSearch}>
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {(collection.includes("EventDaySubmission") || collection.includes("SC1")) && (
+            <div className="flex gap-2 items-center">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={classificationFilter} onValueChange={handleClassificationFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filter by Classification" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Classifications</SelectItem>
+                  {availableClassifications.map((classification) => (
+                    <SelectItem key={classification} value={classification}>
+                      {classification}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
+
+        {/* Active Filters Display */}
+        {(classificationFilter !== "all") && (
+          <div className="flex gap-2 items-center">
+            <span className="text-sm text-muted-foreground">Active filters:</span>
+            <Badge variant="secondary" className="flex items-center gap-1">
+              Classification: {classificationFilter}
+              <button
+                onClick={() => handleClassificationFilter("all")}
+                className="ml-1 hover:bg-gray-200 rounded-full p-0.5"
+              >
+                ×
+              </button>
+            </Badge>
+          </div>
+        )}
 
         {/* Data Table */}
         <div className="border rounded-lg overflow-hidden">
@@ -551,7 +867,14 @@ export function CrudInterface({ database, collection, title, description }: Crud
                 variant="outline"
                 size="sm"
                 disabled={currentPage === 1}
-                onClick={() => fetchDocuments(currentPage - 1, searchTerm)}
+                onClick={() => {
+                  if (classificationFilter !== "all") {
+                    // Handle client-side pagination for filtered data
+                    handleFilteredPagination(currentPage - 1)
+                  } else {
+                    fetchDocuments(currentPage - 1, searchTerm, classificationFilter)
+                  }
+                }}
               >
                 Previous
               </Button>
@@ -559,7 +882,14 @@ export function CrudInterface({ database, collection, title, description }: Crud
                 variant="outline"
                 size="sm"
                 disabled={currentPage === totalPages}
-                onClick={() => fetchDocuments(currentPage + 1, searchTerm)}
+                onClick={() => {
+                  if (classificationFilter !== "all") {
+                    // Handle client-side pagination for filtered data
+                    handleFilteredPagination(currentPage + 1)
+                  } else {
+                    fetchDocuments(currentPage + 1, searchTerm, classificationFilter)
+                  }
+                }}
               >
                 Next
               </Button>
