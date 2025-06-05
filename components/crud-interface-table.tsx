@@ -140,29 +140,95 @@ export function CrudInterface({ database, collection, title, description }: Crud
     }
   }
 
-  const fetchWinners = async () => {
+  // const fetchWinners = async () => {
+  //   setWinnersLoading(true)
+  //   try {
+  //     let params = new URLSearchParams({
+  //       database,
+  //       collection,
+  //       winners: "true",
+  //     })
+
+  //     let response = await fetch(`/api/crud?${params}`)
+  //     let result = await response.json()
+
+  //     if (result.success && result.data && result.data.length > 0) {
+  //       // Check if we actually got winners
+  //       const actualWinners = result.data.filter((doc: Document) => 
+  //         getDisplayValue(doc, "eventuserdata.isWinner") === true || 
+  //         getDisplayValue(doc, "eventuserdata.isWinner") === "true"
+  //       )
+        
+  //       if (actualWinners.length > 0) {
+  //         setWinners(actualWinners)
+  //         return
+  //       }
+  //     }
+  //     console.log("API winner filtering not working, using client-side filtering...")
+  //     params = new URLSearchParams({
+  //       database,
+  //       collection,
+  //       page: "1",
+  //       limit: "5000", 
+  //     })
+
+  //     response = await fetch(`/api/crud?${params}`)
+  //     result = await response.json()
+
+  //     if (result.success) {
+  //       const winnersData = result.data.filter((doc: Document) => 
+  //         getDisplayValue(doc, "eventuserdata.isWinner") === true || 
+  //         getDisplayValue(doc, "eventuserdata.isWinner") === "true"
+  //       )
+        
+  //       setWinners(winnersData)
+  //       console.log(`Found ${winnersData.length} winners out of ${result.data.length} total documents`)
+  //     } else {
+  //       alert(result.message || "Failed to fetch documents")
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching winners:", error)
+  //     alert("Failed to fetch winners")
+  //   } finally {
+  //     setWinnersLoading(false)
+  //   }
+  // }
+  const fetchAllWinners = async () => {
     setWinnersLoading(true)
     try {
+      // Fetch all documents (you might need to adjust the limit)
       const params = new URLSearchParams({
         database,
         collection,
-        winners: "true", // Special flag to get only winners
+        page: "1",
+        limit: "10000", // Adjust based on your data size
       })
 
       const response = await fetch(`/api/crud?${params}`)
       const result = await response.json()
 
       if (result.success) {
-        setWinners(result.data)
+        // Filter winners client-side
+        const winnersData = result.data.filter((doc: Document) => 
+          getDisplayValue(doc, "eventuserdata.isWinner") === true || 
+          getDisplayValue(doc, "eventuserdata.isWinner") === "true" ||
+          getDisplayValue(doc, "isWinner") === true || 
+          getDisplayValue(doc, "isWinner") === "true"
+        )
+        
+        setWinners(winnersData)
+        console.log(`Found ${winnersData.length} winners out of ${result.data.length} total documents`)
       } else {
-        alert(result.message || "Failed to fetch winners")
+        alert(result.message || "Failed to fetch documents")
       }
     } catch (error) {
+      console.error("Error fetching winners:", error)
       alert("Failed to fetch winners")
     } finally {
       setWinnersLoading(false)
     }
   }
+
 
   const createDocument = async () => {
     try {
@@ -489,7 +555,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
 
   const openWinnersModal = () => {
     setIsWinnersModalOpen(true)
-    fetchWinners()
+    fetchAllWinners()
   }
 
   useEffect(() => {
@@ -755,10 +821,10 @@ export function CrudInterface({ database, collection, title, description }: Crud
             {(collection.includes("EventDaySubmission") || collection.includes("SC2")) && (
               <Dialog open={isWinnersModalOpen} onOpenChange={setIsWinnersModalOpen}>
                 <DialogTrigger asChild>
-                  {/* <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-black hover:text-black" onClick={openWinnersModal}>
+                  <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-black hover:text-black" onClick={openWinnersModal}>
                     <Trophy className="h-4 w-4 mr-2" />
                     View Winners
-                  </Button> */}
+                  </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
