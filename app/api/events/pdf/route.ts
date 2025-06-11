@@ -36,7 +36,7 @@ const EVENTS = [
   {
     name: "Muthupalasa 4",
     location: "Nuwara Eliya",
-    collection: "mp4-nuwaraeliya",
+    collection: "MP4_NUWARAELIYA",
     url: "https://muthupalasa.com/mp4-nuwaraeliya",
   },
   {
