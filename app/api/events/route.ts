@@ -42,7 +42,7 @@ const EVENTS = [
   {
     name: "Muthupalasa 5",
     location: "Embilipitiya",
-    collection: "mp5-embilipitiya",
+    collection: "MP5_EMB",
     url: "https://muthupalasa.com/mp5-embilipitiya",
   },
   { name: "Muthupalasa 6", location: "Galle", collection: "mp6-galle", url: "https://muthupalasa.com/mp6-galle" },
