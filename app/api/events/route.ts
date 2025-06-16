@@ -52,8 +52,8 @@ const EVENTS = [
     collection: "startclub3-galle",
     url: "https://muthupalasa.com/startclub3-galle",
   },
-  { name: "Muthupalasa 7", location: "Monarch", collection: "mp7-monarch", url: "https://muthupalasa.com/mp7-monarch" },
-  { name: "Muthupalasa 8", location: "Monarch", collection: "mp8-monarch", url: "https://muthupalasa.com/mp8-monarch" },
+  { name: "Muthupalasa 7", location: "Monarch", collection: "MP7_MONARCH", url: "https://muthupalasa.com/mp7-monarch" },
+  { name: "Muthupalasa 8", location: "Monarch", collection: "MP8_MONARCH", url: "https://muthupalasa.com/mp8-monarch" },
   {
     name: "Start Club 4",
     location: "Monarch",
