@@ -57,7 +57,7 @@ const EVENTS = [
   {
     name: "Start Club 4",
     location: "Monarch",
-    collection: "startclub4-monarch",
+    collection: "SC4_MONARCH",
     url: "https://muthupalasa.com/startclub4-monarch",
   },
 ]
