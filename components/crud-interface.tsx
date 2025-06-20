@@ -197,7 +197,7 @@ export function CrudInterface({ database, collection, title, description }: Crud
         nic: getDisplayValue(doc, "dealerInfo.ownerNIC"),
         shop: getDisplayValue(doc, "dealerInfo.shopName"),
       }
-    } else if (collection.includes("EventDaySubmission") || collection.includes("SC4")) {
+    } else if (collection.includes("EventDaySubmission") || collection.includes("MP6")) {
       return {
         name: getDisplayValue(doc, "eventuserdata.ownerName"),
         nic: getDisplayValue(doc, "eventuserdata.ownerNIC"),

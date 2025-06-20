@@ -45,7 +45,7 @@ const EVENTS = [
     collection: "MP5_EMB",
     url: "https://muthupalasa.com/mp5-embilipitiya",
   },
-  { name: "Muthupalasa 6", location: "Galle", collection: "mp6-galle", url: "https://muthupalasa.com/mp6-galle" },
+  { name: "Muthupalasa 6", location: "Galle", collection: "MP6_GALLE", url: "https://muthupalasa.com/mp6-galle" },
   {
     name: "Start Club 3",
     location: "Galle",
