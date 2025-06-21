@@ -49,7 +49,7 @@ const EVENTS = [
   {
     name: "Start Club 3",
     location: "Galle",
-    collection: "startclub3-galle",
+    collection: "SC3_GALLE",
     url: "https://muthupalasa.com/startclub3-galle",
   },
   { name: "Muthupalasa 7", location: "Monarch", collection: "MP7_MONARCH", url: "https://muthupalasa.com/mp7-monarch" },
